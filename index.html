@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Bilfen Lego Kodlama Şehri 3D</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 3D Kütüphaneleri -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      font-family: 'Times New Roman', Times, serif !important;
+    }
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background-color: #0284c7;
+    }
+
+    .lego-bg-pattern {
+      background-color: var(--lego-bg-color, #0284c7);
+      background-image: 
+        radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.05) 20%, transparent 22%),
+        radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.15) 22%, transparent 26%);
+      background-position: 0 0, 3px 4px;
+      background-size: 40px 40px;
+      transition: background-color 0.5s ease;
+    }
+
+    .lego-btn {
+      transition: all 0.12s ease;
+      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25);
+      cursor: pointer;
+    }
+    .lego-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+    }
+
+    #threeCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+    }
+
+    #uiLayer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 8px;
+    }
+
+    .pointer-auto {
+      pointer-events: auto;
+    }
+
+    .step-card {
+      transition: transform 0.15s ease;
+    }
+  </style>
+</head>
+<body id="mainBody" class="w-screen h-screen lego-bg-pattern" style="--lego-bg-color: #0284c7;">
+
+  <!-- 3D Canvas -->
+  <div id="threeCanvas"></div>
+
+  <!-- Arayüz -->
+  <div id="uiLayer">
+    <!-- Üst Kontrol Paneli -->
+    <header class="w-full max-w-xl mx-auto bg-white/95 rounded-2xl px-3 py-2 shadow-2xl border-4 border-yellow-400 pointer-auto flex items-center justify-between gap-1">
+      <div class="flex items-center gap-1.5">
+        <div onclick="openStartScreen()" class="cursor-pointer hover:scale-105 transition-transform" title="Ana Sayfa">
+          <svg class="h-8 w-auto rounded-lg" viewBox="0 0 340 120" xmlns="http://www.w3.org/2000/svg">
+            <rect width="340" height="120" rx="20" fill="#003366" />
+            <circle cx="104" cy="31" r="13" fill="#ffffff" />
+            <ellipse cx="104" cy="31" rx="28" ry="6.5" fill="none" stroke="#ffffff" stroke-width="3" transform="rotate(-16 104 31)" />
+            <text x="170" y="74" font-weight="900" font-size="44" fill="#ffffff" text-anchor="middle" letter-spacing="6">BİLFEN</text>
+            <text x="170" y="98" font-weight="600" font-size="14" fill="#e0f2fe" text-anchor="middle" letter-spacing="5">EĞİTİM KURUMLARI</text>
+          </svg>
+        </div>
+        <div id="headerAvatar" class="w-9 h-9 bg-yellow-100 rounded-xl border border-amber-400 p-0.5 flex items-center justify-center cursor-pointer" onclick="openStartScreen()"></div>
+      </div>
+
+      <!-- Bilgi Rozetleri -->
+      <div class="flex items-center gap-1 text-xs">
+        <div onclick="openLevelSelectModal()" class="bg-yellow-400 text-yellow-950 font-black px-2 py-1 rounded-xl shadow-sm cursor-pointer">
+          🗺️ <span id="levelBadgeText">1 / 20</span>
+        </div>
+        <div onclick="openLevelSelectModal()" class="bg-amber-100 text-amber-900 font-black px-2 py-1 rounded-xl shadow-sm cursor-pointer">
+          ⭐ <span id="totalStarsCounter">0 / 60</span>
+        </div>
+        <div class="bg-emerald-100 text-emerald-950 font-black px-2 py-1 rounded-xl shadow-sm">
+          <span id="levelTargetIcon">🪵</span> <span id="brickCounter">0 / 1</span>
+        </div>
+      </div>
+
+      <!-- İşlem Butonları -->
+      <div class="flex items-center gap-1">
+        <button type="button" onclick="openLevelSelectModal()" class="bg-indigo-600 text-white p-1.5 rounded-xl text-sm lego-btn" title="Bölümler">🗺️</button>
+        <button type="button" onclick="enterCityBuilderGame()" class="bg-amber-500 text-white p-1.5 rounded-xl text-sm lego-btn" title="Lego Şehri">🏙️</button>
+        <button type="button" onclick="toggleCameraView()" class="bg-sky-500 text-white p-1.5 rounded-xl text-sm lego-btn" title="Kamera">🎥</button>
+        <button type="button" onclick="openStartScreen()" class="bg-rose-500 text-white p-1.5 rounded-xl text-sm lego-btn" title="Menü">🏠</button>
+      </div>
+    </header>
+
+    <!-- Kodlama Tepsisi & Butonlar -->
+    <footer id="codingFooter" class="w-full max-w-xl mx-auto bg-white/95 rounded-t-3xl p-2.5 shadow-2xl border-t-4 border-x-4 border-yellow-400 pointer-auto space-y-2 mb-0">
+      <div class="flex justify-between items-center px-1">
+        <span class="text-xs font-black text-blue-950">🧩 ADIMLAR: <span id="stepCountBadge" class="bg-blue-600 text-white px-2 py-0.5 rounded-full">0</span></span>
+        <div class="flex gap-1">
+          <button type="button" onclick="resetCurrentLevelPosition()" class="text-xs font-black bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded-lg border border-slate-300">Başa Al ↺</button>
+          <button type="button" onclick="clearCommands()" class="text-xs font-black bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-0.5 rounded-lg border border-rose-300">Temizle ✕</button>
+        </div>
+      </div>
+
+      <!-- Komut Çubuğu -->
+      <div id="commandTray" class="flex items-center gap-1.5 min-h-[58px] p-1.5 bg-sky-50 rounded-2xl border-2 border-dashed border-sky-300 overflow-x-auto">
+        <span id="emptyTrayText" class="text-xs text-slate-500 font-bold mx-auto">👇 Yön tuşlarına basarak karakteri hareket ettir!</span>
+      </div>
+
+      <!-- Yön Butonları -->
+      <div class="grid grid-cols-5 gap-1.5">
+        <button type="button" onclick="addCommand('turnLeft')" class="lego-btn bg-orange-500 text-white font-black rounded-xl py-2 flex flex-col items-center justify-center">
+          <span class="text-xl">↩️</span>
+          <span class="text-[9px] mt-0.5">SOLA DÖN</span>
+        </button>
+        <button type="button" onclick="addCommand('forward')" class="lego-btn bg-blue-600 text-white font-black rounded-xl py-2 flex flex-col items-center justify-center">
+          <span class="text-xl">⬆️</span>
+          <span class="text-[9px] mt-0.5">İLERİ GİT</span>
+        </button>
+        <button type="button" onclick="addCommand('backward')" class="lego-btn bg-purple-600 text-white font-black rounded-xl py-2 flex flex-col items-center justify-center">
+          <span class="text-xl">⬇️</span>
+          <span class="text-[9px] mt-0.5">GERİ GİT</span>
+        </button>
+        <button type="button" onclick="addCommand('turnRight')" class="lego-btn bg-pink-500 text-white font-black rounded-xl py-2 flex flex-col items-center justify-center">
+          <span class="text-xl">↪️</span>
+          <span class="text-[9px] mt-0.5">SAĞA DÖN</span>
+        </button>
+        <button type="button" id="runButton" onclick="runAlgorithm()" class="lego-btn bg-emerald-500 text-white font-black rounded-xl py-2 flex flex-col items-center justify-center">
+          <span class="text-xl">▶️</span>
+          <span class="text-[9px] mt-0.5">ÇALIŞTIR</span>
+        </button>
+      </div>
+    </footer>
+
+    <!-- Lego Şehri Paneli -->
+    <footer id="cityBuildFooter" class="hidden w-full max-w-xl mx-auto bg-white/95 rounded-t-3xl p-3 shadow-2xl border-t-4 border-x-4 border-yellow-400 pointer-auto space-y-2 mb-0">
+      <div class="flex justify-between items-center">
+        <div>
+          <h4 class="text-xs font-black text-blue-900 leading-none">🏙️ BİLFEN LEGO ŞEHRİ</h4>
+          <p id="cityStatusText" class="text-[10px] text-slate-600 mt-0.5">Yapılara tıklayarak şehrini kur!</p>
+        </div>
+        <div class="flex gap-1">
+          <button type="button" onclick="toggleCityDayNight()" class="bg-indigo-600 text-white px-2 py-1 rounded-lg text-xs lego-btn">🌙 / ☀️</button>
+          <button type="button" onclick="resetCityBuild()" class="bg-amber-100 text-amber-900 border border-amber-300 px-2 py-1 rounded-lg text-xs lego-btn">Sıfırla</button>
+          <button type="button" onclick="exitCityBuilderToLevels()" class="bg-slate-200 text-slate-800 px-2 py-1 rounded-lg text-xs lego-btn">Bölümler</button>
+        </div>
+      </div>
+      <div id="cityPartsTray" class="grid grid-cols-4 sm:grid-cols-8 gap-1.5 py-1"></div>
+    </footer>
+  </div>
+
+  <!-- Başlangıç Ekranı -->
+  <div id="startScreen" class="fixed inset-0 lego-bg-pattern z-50 flex flex-col items-center justify-center p-3 overflow-y-auto pointer-auto" style="--lego-bg-color: #0284c7;">
+    <div class="max-w-md w-full bg-white rounded-3xl p-5 shadow-2xl border-4 border-yellow-400 text-center relative my-auto">
+      <div class="flex justify-center mb-1">
+        <svg class="h-12 w-auto drop-shadow-md rounded-xl" viewBox="0 0 340 120" xmlns="http://www.w3.org/2000/svg">
+          <rect width="340" height="120" rx="20" fill="#003366" />
+          <circle cx="104" cy="31" r="13" fill="#ffffff" />
+          <ellipse cx="104" cy="31" rx="28" ry="6.5" fill="none" stroke="#ffffff" stroke-width="3" transform="rotate(-16 104 31)" />
+          <text x="170" y="74" font-weight="900" font-size="44" fill="#ffffff" text-anchor="middle" letter-spacing="6">BİLFEN</text>
+          <text x="170" y="98" font-weight="600" font-size="14" fill="#e0f2fe" text-anchor="middle" letter-spacing="5">EĞİTİM KURUMLARI</text>
+        </svg>
+      </div>
+
+      <h1 class="text-2xl font-black text-blue-900 mt-1">LEGO KODLAMA ŞEHRİ</h1>
+
+      <div class="mt-3 flex justify-center gap-2 text-xs font-black text-amber-900">
+        <span id="startCompletedCount" class="bg-emerald-500 text-white px-2 py-0.5 rounded-full">🏆 0 / 20</span>
+        <span id="startTotalStars" class="bg-yellow-400 text-yellow-950 px-2 py-0.5 rounded-full">⭐ 0 / 60</span>
+        <button type="button" onclick="confirmResetAllProgress()" class="bg-rose-100 text-rose-700 border border-rose-300 px-2 py-0.5 rounded-full cursor-pointer">🗑️ Sıfırla</button>
+      </div>
+
+      <!-- Karakter Seçimi -->
+      <div class="mt-3">
+        <p class="font-black text-slate-800 text-xs mb-1.5">Karakterini Seç:</p>
+        <div class="grid grid-cols-2 gap-2.5 max-w-xs mx-auto">
+          <button type="button" onclick="selectHero('girl')" id="heroBtn-girl" class="p-2 rounded-2xl border-4 border-pink-500 bg-pink-50 flex flex-col items-center shadow cursor-pointer">
+            <div id="heroPreview-girl" class="w-24 h-28 flex items-center justify-center bg-white rounded-xl border border-pink-200"></div>
+            <span class="text-xs font-black mt-1 text-pink-700">👧 Kız Öğrenci</span>
+          </button>
+          <button type="button" onclick="selectHero('boy')" id="heroBtn-boy" class="p-2 rounded-2xl border-4 border-slate-200 bg-sky-50 flex flex-col items-center shadow cursor-pointer">
+            <div id="heroPreview-boy" class="w-24 h-28 flex items-center justify-center bg-white rounded-xl border border-sky-200"></div>
+            <span class="text-xs font-black mt-1 text-blue-700">👦 Erkek Öğrenci</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <button type="button" onclick="startGame()" class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-base rounded-2xl lego-btn border-b-4 border-emerald-700">BAŞLA! 🚀</button>
+        <button type="button" onclick="startScreenToLevelSelect()" class="w-24 py-2.5 bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-xs rounded-2xl lego-btn border-b-4 border-amber-600">Harita 🗺️</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bölüm Seçim Modalı -->
+  <div id="levelSelectModal" class="fixed inset-0 lego-bg-pattern z-50 hidden flex items-center justify-center p-3 pointer-auto">
+    <div class="bg-white rounded-3xl p-4 max-w-md w-full text-center border-4 border-yellow-400 shadow-2xl max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-center pb-2 border-b">
+        <h3 class="text-base font-black text-blue-900">🗺️ Bölüm Haritası</h3>
+        <button type="button" onclick="closeLevelSelectModal()" class="w-7 h-7 bg-slate-200 rounded-full font-black text-sm">✕</button>
+      </div>
+      <div class="overflow-y-auto py-2 space-y-2 flex-1 text-left" id="levelSelectListHolder"></div>
+    </div>
+  </div>
+
+  <!-- Tebrik Modalı -->
+  <div id="celebrationModal" class="fixed inset-0 bg-slate-900/80 z-50 hidden flex items-center justify-center p-4 pointer-auto">
+    <div class="bg-white rounded-3xl p-5 max-w-xs w-full text-center border-4 border-yellow-400 shadow-2xl">
+      <div class="text-3xl mb-1">🎉 🏆 🎉</div>
+      <h3 class="text-xl font-black text-blue-900" id="modalTitle">TEBRİKLER!</h3>
+      <div class="my-2 text-2xl tracking-widest text-amber-500">⭐⭐⭐</div>
+      <div class="my-2 p-2 bg-emerald-50 rounded-xl border border-emerald-200">
+        <div id="modalSvgPiece" class="text-4xl mb-1">🪵</div>
+        <div class="text-xs font-black text-emerald-900">Parça Toplandı!</div>
+      </div>
+      <button type="button" id="modalActionBtn" onclick="nextLevel()" class="w-full py-2.5 bg-emerald-500 text-white font-black text-sm rounded-xl lego-btn">SONRAKİ BÖLÜM ➔</button>
+    </div>
+  </div>
+
+  <!-- Sıfırlama Onay Modalı -->
+  <div id="resetConfirmModal" class="fixed inset-0 bg-slate-900/80 z-50 hidden flex items-center justify-center p-4 pointer-auto">
+    <div class="bg-white rounded-3xl p-5 max-w-xs w-full text-center border-4 border-rose-400 shadow-2xl">
+      <div class="text-3xl mb-1">🗑️</div>
+      <h3 class="text-base font-black text-rose-700">Tüm İlerleme Sıfırlansın mı?</h3>
+      <div class="mt-3 flex gap-2">
+        <button type="button" onclick="closeResetConfirmModal()" class="flex-1 py-1.5 bg-slate-200 text-slate-800 font-black rounded-lg text-xs">Vazgeç</button>
+        <button type="button" onclick="executeResetAllProgress()" class="flex-1 py-1.5 bg-rose-500 text-white font-black rounded-lg text-xs">Sıfırla</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toastMessage" class="fixed top-4 left-1/2 -translate-x-1/2 bg-rose-600 text-white px-3 py-1.5 rounded-xl shadow-lg border border-white font-black text-xs flex items-center gap-1.5 transform -translate-y-24 transition-transform duration-300 z-50 pointer-events-none">
+    <span id="toastIcon">⚠️</span>
+    <span id="toastText">Hata!</span>
+  </div>
+
+  <script>
+    let synth = null, metalSynth = null, audioStarted = false;
+
+    function initAudio() {
+      if (audioStarted || typeof Tone === 'undefined') return;
+      try {
+        Tone.start();
+        synth = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'triangle' },
+          envelope: { attack: 0.01, decay: 0.08, sustain: 0.05, release: 0.15 }
+        }).toDestination();
+        metalSynth = new Tone.MembraneSynth().toDestination();
+        audioStarted = true;
+      } catch (e) {}
+    }
+
+    function playSound(type) {
+      initAudio();
+      if (!synth) return;
+      try {
+        const now = Tone.now();
+        if (type === 'click') synth.triggerAttackRelease("C5", "32n", now);
+        else if (type === 'step') synth.triggerAttackRelease("E5", "32n", now, 0.4);
+        else if (type === 'turn') synth.triggerAttackRelease("A4", "32n", now, 0.3);
+        else if (type === 'brick') synth.triggerAttackRelease(["G5", "C6"], "24n", now);
+        else if (type === 'bump') synth.triggerAttackRelease(["D3", "C3"], "12n", now);
+        else if (type === 'win') synth.triggerAttackRelease(["C5", "E5", "G5", "C6"], "10n", now);
+      } catch (e) {}
+    }
+
+    const LEVEL_BG_COLORS = [
+      '#0284c7', '#db2777', '#16a34a', '#7c3aed', '#ea580c',
+      '#0d9488', '#2563eb', '#e11d48', '#059669', '#9333ea',
+      '#d97706', '#0891b2', '#4f46e5', '#c026d3', '#15803d',
+      '#dc2626', '#0369a1', '#be185d', '#6d28d9', '#b45309'
+    ];
+
+    function applyLevelBackgroundTheme(levelIndex) {
+      const color = LEVEL_BG_COLORS[levelIndex % LEVEL_BG_COLORS.length];
+      document.body.style.setProperty('--lego-bg-color', color);
+    }
+
+    const HEROES = {
+      girl: { name: "Kız Öğrenci", gender: "girl", hairColor: 0x652810, torsoColor: 0x0f2547, skirtColor: 0x1e3050 },
+      boy: { name: "Erkek Öğrenci", gender: "boy", hairColor: 0x8a451d, torsoColor: 0x0f2547, legsColor: 0x1e3050 }
+    };
+    let selectedHeroKey = 'girl';
+
+    const DIR_DELTAS = [
+      { dx: 0, dy: -1, rotY: Math.PI },
+      { dx: 1, dy: 0,  rotY: Math.PI / 2 },
+      { dx: 0, dy: 1,  rotY: 0 },
+      { dx: -1, dy: 0, rotY: -Math.PI / 2 }
+    ];
+
+    const LEVELS = [
+      { id: 1, title: "Ağacın Kökü", gridSize: 5, startPos: { x: 2, y: 4 }, startDir: 0, partIcon: "🪵", bricks: [{ x: 2, y: 3, type: 'trunk' }], obstacles: [], goal: { x: 2, y: 2 } },
+      { id: 2, title: "Dallar", gridSize: 5, startPos: { x: 2, y: 4 }, startDir: 0, partIcon: "🌿", bricks: [{ x: 2, y: 3, type: 'branch' }, { x: 2, y: 2, type: 'branch' }], obstacles: [], goal: { x: 2, y: 1 } },
+      { id: 3, title: "Geniş Yapraklar", gridSize: 5, startPos: { x: 1, y: 3 }, startDir: 0, partIcon: "🍃", bricks: [{ x: 1, y: 2, type: 'leaf_base' }], obstacles: [{ x: 1, y: 1 }], goal: { x: 2, y: 2 } },
+      { id: 4, title: "Tepe Tacı", gridSize: 5, startPos: { x: 3, y: 4 }, startDir: 0, partIcon: "🌲", bricks: [{ x: 3, y: 2, type: 'leaf_top' }], obstacles: [{ x: 3, y: 1 }, { x: 1, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 5, title: "Elmalar", gridSize: 5, startPos: { x: 1, y: 4 }, startDir: 0, partIcon: "🍎", bricks: [{ x: 1, y: 3, type: 'apple' }, { x: 2, y: 2, type: 'apple' }], obstacles: [{ x: 1, y: 1 }], goal: { x: 3, y: 2 } },
+      { id: 6, title: "Duvar Bloğu", gridSize: 5, startPos: { x: 1, y: 4 }, startDir: 0, partIcon: "🧱", bricks: [{ x: 1, y: 2, type: 'house_wall' }], obstacles: [{ x: 2, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 7, title: "Kapı Bloğu", gridSize: 5, startPos: { x: 3, y: 4 }, startDir: 0, partIcon: "🚪", bricks: [{ x: 3, y: 2, type: 'house_door' }], obstacles: [{ x: 2, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 8, title: "Camlı Pencere", gridSize: 5, startPos: { x: 1, y: 4 }, startDir: 0, partIcon: "🪟", bricks: [{ x: 1, y: 3, type: 'house_window' }, { x: 2, y: 2, type: 'house_window' }], obstacles: [{ x: 1, y: 2 }], goal: { x: 2, y: 1 } },
+      { id: 9, title: "Üçgen Çatı", gridSize: 5, startPos: { x: 1, y: 4 }, startDir: 0, partIcon: "🏠", bricks: [{ x: 1, y: 2, type: 'house_roof' }], obstacles: [{ x: 2, y: 3 }, { x: 1, y: 1 }], goal: { x: 3, y: 2 } },
+      { id: 10, title: "Dumanlı Baca", gridSize: 5, startPos: { x: 3, y: 4 }, startDir: 0, partIcon: "☁️", bricks: [{ x: 3, y: 2, type: 'house_chimney' }], obstacles: [{ x: 2, y: 3 }], goal: { x: 1, y: 2 } },
+      { id: 11, title: "Kasa Bloğu", gridSize: 5, startPos: { x: 0, y: 4 }, startDir: 0, partIcon: "🖥️", bricks: [{ x: 0, y: 2, type: 'comp_case' }], obstacles: [{ x: 1, y: 3 }], goal: { x: 1, y: 2 } },
+      { id: 12, title: "Monitör", gridSize: 5, startPos: { x: 4, y: 4 }, startDir: 0, partIcon: "💻", bricks: [{ x: 4, y: 2, type: 'comp_monitor' }], obstacles: [{ x: 3, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 13, title: "Klavye", gridSize: 5, startPos: { x: 0, y: 4 }, startDir: 0, partIcon: "⌨️", bricks: [{ x: 0, y: 2, type: 'comp_keyboard' }, { x: 2, y: 2, type: 'comp_keyboard' }], obstacles: [{ x: 1, y: 3 }], goal: { x: 2, y: 1 } },
+      { id: 14, title: "Fare", gridSize: 5, startPos: { x: 4, y: 4 }, startDir: 0, partIcon: "🖱️", bricks: [{ x: 4, y: 2, type: 'comp_mouse' }, { x: 2, y: 2, type: 'comp_mouse' }], obstacles: [{ x: 3, y: 3 }], goal: { x: 2, y: 1 } },
+      { id: 15, title: "Hoparlör", gridSize: 5, startPos: { x: 1, y: 4 }, startDir: 0, partIcon: "🔊", bricks: [{ x: 1, y: 2, type: 'comp_speaker' }, { x: 3, y: 2, type: 'comp_speaker' }], obstacles: [{ x: 2, y: 3 }], goal: { x: 3, y: 1 } },
+      { id: 16, title: "Şasi Plakası", gridSize: 5, startPos: { x: 0, y: 4 }, startDir: 0, partIcon: "🛹", bricks: [{ x: 0, y: 2, type: 'car_chassis' }], obstacles: [{ x: 1, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 17, title: "Tekerlekler", gridSize: 5, startPos: { x: 4, y: 4 }, startDir: 0, partIcon: "🛞", bricks: [{ x: 4, y: 2, type: 'car_wheel' }], obstacles: [{ x: 3, y: 3 }], goal: { x: 2, y: 2 } },
+      { id: 18, title: "Kabin", gridSize: 5, startPos: { x: 0, y: 4 }, startDir: 0, partIcon: "🚖", bricks: [{ x: 0, y: 2, type: 'car_cabin' }, { x: 2, y: 2, type: 'car_cabin' }], obstacles: [{ x: 1, y: 3 }], goal: { x: 3, y: 2 } },
+      { id: 19, title: "Siren", gridSize: 5, startPos: { x: 4, y: 4 }, startDir: 0, partIcon: "🚨", bricks: [{ x: 4, y: 2, type: 'car_siren' }, { x: 2, y: 2, type: 'car_siren' }], obstacles: [{ x: 3, y: 3 }], goal: { x: 1, y: 2 } },
+      { id: 20, title: "Şarj Ünitesi", gridSize: 5, startPos: { x: 0, y: 4 }, startDir: 0, partIcon: "⚡", bricks: [{ x: 0, y: 2, type: 'car_charger' }, { x: 2, y: 2, type: 'car_charger' }], obstacles: [{ x: 1, y: 3 }], goal: { x: 3, y: 2 } }
+    ];
+
+    const STORAGE_KEY = 'bilfen_lego_kodlama_v9';
+    let currentLevelIndex = 0;
+    let playerPos = { x: 2, y: 4 };
+    let playerDir = 0;
+    let collectedBricks = 0;
+    let commands = [];
+    let isExecuting = false;
+    let activeLevelBricks = [];
+    let completedLevels = new Array(20).fill(false);
+    let levelStars = new Array(20).fill(0);
+
+    let isCityMode = false;
+    let cityAssemblyGroup = null;
+    let cityPlacedSteps = new Array(8).fill(false);
+    let isCityNight = false;
+
+    function loadSavedProgress() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (Array.isArray(data.completedLevels)) completedLevels = data.completedLevels;
+          if (Array.isArray(data.levelStars)) levelStars = data.levelStars;
+          if (data.selectedHeroKey) selectedHeroKey = data.selectedHeroKey;
+        }
+      } catch (e) {}
+      updateProgressCountersUI();
+    }
+
+    function saveProgress() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ completedLevels, levelStars, selectedHeroKey }));
+      } catch (e) {}
+      updateProgressCountersUI();
+    }
+
+    function updateProgressCountersUI() {
+      const totalStars = levelStars.reduce((sum, s) => sum + (s || 0), 0);
+      const doneCount = completedLevels.filter(Boolean).length;
+      document.getElementById('totalStarsCounter').innerText = `${totalStars} / 60`;
+      document.getElementById('startCompletedCount').innerText = `🏆 ${doneCount} / 20`;
+      document.getElementById('startTotalStars').innerText = `⭐ ${totalStars} / 60`;
+    }
+
+    function confirmResetAllProgress() {
+      playSound('click');
+      document.getElementById('resetConfirmModal').classList.remove('hidden');
+    }
+    function closeResetConfirmModal() {
+      playSound('click');
+      document.getElementById('resetConfirmModal').classList.add('hidden');
+    }
+    function executeResetAllProgress() {
+      playSound('bump');
+      completedLevels = new Array(20).fill(false);
+      levelStars = new Array(20).fill(0);
+      cityPlacedSteps = new Array(8).fill(false);
+      saveProgress();
+      closeResetConfirmModal();
+      closeLevelSelectModal();
+      loadLevel(0);
+      showToast("Tüm bölümler sıfırlandı!", "🔄");
+    }
+
+    /* 3D Sahne */
+    let scene, camera, renderer, controls, ambientLight, sunLight;
+    let baseplateGroup, boardGroup, pathPreviewGroup, characterGroup, itemsGroup, obstaclesGroup, goalGroup;
+    let characterMesh = null;
+    let isTopDownCamera = false;
+
+    function createLegoMat(colorHex) {
+      return new THREE.MeshLambertMaterial({ color: colorHex });
+    }
+
+    function init3DScene() {
+      const container = document.getElementById('threeCanvas');
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.set(0, 16, 15);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minAzimuthAngle = 0;
+      controls.maxAzimuthAngle = 0;
+      controls.maxPolarAngle = Math.PI / 2.2;
+      controls.target.set(0, 0, 1.2);
+
+      ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+      scene.add(ambientLight);
+
+      sunLight = new THREE.DirectionalLight(0xfffbeb, 1.1);
+      sunLight.position.set(10, 20, 14);
+      scene.add(sunLight);
+
+      baseplateGroup = new THREE.Group(); scene.add(baseplateGroup);
+      boardGroup = new THREE.Group(); scene.add(boardGroup);
+      pathPreviewGroup = new THREE.Group(); scene.add(pathPreviewGroup);
+      obstaclesGroup = new THREE.Group(); scene.add(obstaclesGroup);
+      itemsGroup = new THREE.Group(); scene.add(itemsGroup);
+      goalGroup = new THREE.Group(); scene.add(goalGroup);
+      characterGroup = new THREE.Group(); scene.add(characterGroup);
+
+      buildBaseWorld();
+      window.addEventListener('resize', onWindowResize);
+      animate();
+    }
+
+    function onWindowResize() {
+      if (!camera || !renderer) return;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function toggleCameraView() {
+      playSound('click');
+      if (isTopDownCamera) {
+        camera.position.set(0, 16, 15);
+        controls.target.set(0, 0, 1.2);
+        isTopDownCamera = false;
+      } else {
+        camera.position.set(0, 21, 1.21);
+        controls.target.set(0, 0, 1.2);
+        isTopDownCamera = true;
+      }
+    }
+
+    const CELL_SIZE = 2.0;
+    function gridToWorld(gx, gy) {
+      return { x: (gx - 2) * CELL_SIZE, z: (gy - 2) * CELL_SIZE };
+    }
+
+    function buildBaseWorld() {
+      const baseplateWidth = 5 * CELL_SIZE + 1.2;
+      const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(baseplateWidth, 0.4, baseplateWidth), createLegoMat(0x2e7d32));
+      baseMesh.position.y = -0.2;
+      baseplateGroup.add(baseMesh);
+    }
+
+    function buildLevelBoard() {
+      while (boardGroup.children.length > 0) boardGroup.remove(boardGroup.children[0]);
+      const lvl = LEVELS[currentLevelIndex];
+
+      for (let y = 0; y < lvl.gridSize; y++) {
+        for (let x = 0; x < lvl.gridSize; x++) {
+          const wpos = gridToWorld(x, y);
+          const isEven = (x + y) % 2 === 0;
+          const tileMesh = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE - 0.08, 0.1, CELL_SIZE - 0.08), createLegoMat(isEven ? 0x84cc16 : 0x74b816));
+          tileMesh.position.set(wpos.x, 0.05, wpos.z);
+          boardGroup.add(tileMesh);
+
+          // 4 Diş
+          const sGeom = new THREE.CylinderGeometry(0.2, 0.2, 0.12, 12);
+          const smat = createLegoMat(isEven ? 0x84cc16 : 0x65a30d);
+          [-0.48, 0.48].forEach(ox => {
+            [-0.48, 0.48].forEach(oz => {
+              const stud = new THREE.Mesh(sGeom, smat);
+              stud.position.set(wpos.x + ox, 0.1, wpos.z + oz);
+              boardGroup.add(stud);
+            });
+          });
+        }
+      }
+    }
+
+    /* Belirgin Kırmızı Trafik Konisi Engeli */
+    function create3DObstacleBarrier() {
+      const group = new THREE.Group();
+      const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 1.2), createLegoMat(0xdc2626));
+      base.position.y = 0.05; group.add(base);
+
+      const cone = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.48, 1.0, 16), createLegoMat(0xef4444));
+      cone.position.y = 0.55; group.add(cone);
+
+      const stripe = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.36, 0.28, 16), createLegoMat(0xffffff));
+      stripe.position.y = 0.55; group.add(stripe);
+
+      const signCanvas = document.createElement('canvas');
+      signCanvas.width = 64; signCanvas.height = 64;
+      const sctx = signCanvas.getContext('2d');
+      sctx.fillStyle = '#dc2626'; sctx.beginPath(); sctx.arc(32,32,30,0,Math.PI*2); sctx.fill();
+      sctx.strokeStyle = '#ffffff'; sctx.lineWidth = 8;
+      sctx.beginPath(); sctx.moveTo(16,16); sctx.lineTo(48,48); sctx.moveTo(48,16); sctx.lineTo(16,48); sctx.stroke();
+
+      const cross = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(signCanvas), transparent: true }));
+      cross.position.set(0, 1.25, 0); group.add(cross);
+      return group;
+    }
+
+    /* Karakter */
+    function createMinifigureMesh(heroKey) {
+      const hero = HEROES[heroKey] || HEROES.girl;
+      const group = new THREE.Group();
+
+      // Sarı Yön Oku
+      const arrow = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.42, 4), createLegoMat(0xfacc15));
+      arrow.rotation.x = Math.PI / 2; arrow.rotation.z = Math.PI / 4;
+      arrow.position.set(0, 0.12, 0.85); group.add(arrow);
+
+      // Kafa
+      const skinMat = createLegoMat(0xfacc15);
+      const head = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.42, 16), skinMat);
+      head.position.y = 1.42; group.add(head);
+
+      const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.1, 12), skinMat);
+      stud.position.y = 0.26; head.add(stud);
+
+      // Saç
+      const hairMat = createLegoMat(hero.hairColor);
+      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12, 0, Math.PI * 2, 0, Math.PI / 1.8), hairMat);
+      hair.position.y = 0.12; head.add(hair);
+
+      if (hero.gender === 'girl') {
+        [-0.36, 0.36].forEach(px => {
+          const pt = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), hairMat);
+          pt.scale.set(0.9, 1.4, 0.9); pt.position.set(px, 0.05, -0.06); head.add(pt);
+        });
+      }
+
+      // Gövde (Lacivert-Bordo Kazak)
+      const sweaterCanvas = document.createElement('canvas');
+      sweaterCanvas.width = 64; sweaterCanvas.height = 64;
+      const sctx = sweaterCanvas.getContext('2d');
+      sctx.fillStyle = '#0f2547'; sctx.fillRect(0,0,64,64);
+      sctx.fillStyle = '#75142b'; sctx.fillRect(0, 12, 64, 14); sctx.fillRect(0, 38, 64, 14);
+      sctx.fillStyle = '#ffffff'; sctx.beginPath(); sctx.moveTo(18,0); sctx.lineTo(32,16); sctx.lineTo(46,0); sctx.closePath(); sctx.fill();
+
+      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.62, 0.4), new THREE.MeshLambertMaterial({ map: new THREE.CanvasTexture(sweaterCanvas) }));
+      torso.position.y = 0.88; group.add(torso);
+
+      // Bacaklar
+      const legMat = createLegoMat(0x1e3050);
+      const legs = new THREE.Mesh(new THREE.BoxGeometry(0.64, 0.52, 0.36), legMat);
+      legs.position.y = 0.36; group.add(legs);
+
+      return group;
+    }
+
+    function renderPathPreviewOnBoard() {
+      while (pathPreviewGroup.children.length > 0) pathPreviewGroup.remove(pathPreviewGroup.children[0]);
+      if (isCityMode || commands.length === 0) return;
+
+      const lvl = LEVELS[currentLevelIndex];
+      let simX = lvl.startPos.x;
+      let simY = lvl.startPos.y;
+      let simDir = lvl.startDir !== undefined ? lvl.startDir : 0;
+
+      for (let i = 0; i < commands.length; i++) {
+        const cmd = commands[i];
+        if (cmd === 'turnLeft') {
+          simDir = (simDir + 3) % 4;
+          continue;
+        } else if (cmd === 'turnRight') {
+          simDir = (simDir + 1) % 4;
+          continue;
+        } else if (cmd === 'forward') {
+          simX += DIR_DELTAS[simDir].dx;
+          simY += DIR_DELTAS[simDir].dy;
+        } else if (cmd === 'backward') {
+          simX -= DIR_DELTAS[simDir].dx;
+          simY -= DIR_DELTAS[simDir].dy;
+        }
+
+        if (simX < 0 || simX >= lvl.gridSize || simY < 0 || simY >= lvl.gridSize) break;
+        const isObs = lvl.obstacles.some(o => o.x === simX && o.y === simY);
+
+        const wpos = gridToWorld(simX, simY);
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.35, 0.1, 14), createLegoMat(isObs ? 0xef4444 : 0x2563eb));
+        disc.position.set(wpos.x, 0.15 + (i * 0.01), wpos.z);
+        pathPreviewGroup.add(disc);
+
+        if (isObs) break;
+      }
+    }
+
+    function loadLevel(index) {
+      isCityMode = false;
+      document.getElementById('codingFooter').classList.remove('hidden');
+      document.getElementById('cityBuildFooter').classList.add('hidden');
+
+      if (cityAssemblyGroup && scene) { scene.remove(cityAssemblyGroup); cityAssemblyGroup = null; }
+      boardGroup.visible = true;
+      baseplateGroup.visible = true;
+
+      currentLevelIndex = index;
+      const lvl = LEVELS[currentLevelIndex];
+
+      applyLevelBackgroundTheme(currentLevelIndex);
+
+      playerPos = { ...lvl.startPos };
+      playerDir = lvl.startDir !== undefined ? lvl.startDir : 0;
+      activeLevelBricks = JSON.parse(JSON.stringify(lvl.bricks));
+      collectedBricks = 0;
+      commands = [];
+
+      document.getElementById('levelBadgeText').innerText = `${lvl.id} / ${LEVELS.length}`;
+      document.getElementById('levelTargetIcon').innerText = lvl.partIcon;
+      document.getElementById('brickCounter').innerText = `0 / ${lvl.bricks.length}`;
+
+      clearErrorHighlights();
+      updateCommandTray();
+
+      buildLevelBoard();
+      spawnObstacles();
+      spawnGoal();
+      spawnItems();
+      spawnPlayer();
+    }
+
+    function spawnPlayer() {
+      if (characterMesh) characterGroup.remove(characterMesh);
+      characterMesh = createMinifigureMesh(selectedHeroKey);
+      const wpos = gridToWorld(playerPos.x, playerPos.y);
+      characterMesh.position.set(wpos.x, 0.1, wpos.z);
+      characterMesh.rotation.y = DIR_DELTAS[playerDir].rotY;
+      characterGroup.add(characterMesh);
+    }
+
+    function spawnObstacles() {
+      while (obstaclesGroup.children.length > 0) obstaclesGroup.remove(obstaclesGroup.children[0]);
+      const lvl = LEVELS[currentLevelIndex];
+      lvl.obstacles.forEach(obs => {
+        const barrier = create3DObstacleBarrier();
+        const wpos = gridToWorld(obs.x, obs.y);
+        barrier.position.set(wpos.x, 0.08, wpos.z);
+        obstaclesGroup.add(barrier);
+      });
+    }
+
+    function spawnGoal() {
+      while (goalGroup.children.length > 0) goalGroup.remove(goalGroup.children[0]);
+      const lvl = LEVELS[currentLevelIndex];
+      const goal = new THREE.Group();
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 1.6), createLegoMat(0xfacc15));
+      goal.add(pad);
+
+      const flag = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.08), createLegoMat(0xdc2626));
+      flag.position.set(0, 0.8, 0); goal.add(flag);
+
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.9), createLegoMat(0xffffff));
+      pole.position.set(-0.4, 0.5, 0); goal.add(pole);
+
+      const wpos = gridToWorld(lvl.goal.x, lvl.goal.y);
+      goal.position.set(wpos.x, 0.08, wpos.z);
+      goalGroup.add(goal);
+    }
+
+    function spawnItems() {
+      while (itemsGroup.children.length > 0) itemsGroup.remove(itemsGroup.children[0]);
+      const lvl = LEVELS[currentLevelIndex];
+
+      activeLevelBricks.forEach(b => {
+        if (b.collected) return;
+        const brick = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), createLegoMat(0x22c55e));
+        const wpos = gridToWorld(b.x, b.y);
+        brick.position.set(wpos.x, 0.35, wpos.z);
+        brick.userData = { brickRef: b };
+        itemsGroup.add(brick);
+      });
+    }
+
+    function clearErrorHighlights() {
+      document.querySelectorAll('.error-step').forEach(el => el.classList.remove('error-step'));
+    }
+
+    function addCommand(cmdType) {
+      if (isExecuting || isCityMode) return;
+      if (commands.length >= 14) {
+        showToast("Maksimum 14 adım!", "⚠️");
+        return;
+      }
+      playSound('click');
+      clearErrorHighlights();
+      commands.push(cmdType);
+      updateCommandTray();
+    }
+
+    function resetCurrentLevelPosition() {
+      if (isExecuting || isCityMode) return;
+      playSound('click');
+      clearErrorHighlights();
+      const lvl = LEVELS[currentLevelIndex];
+      playerPos = { ...lvl.startPos };
+      playerDir = lvl.startDir !== undefined ? lvl.startDir : 0;
+      activeLevelBricks = JSON.parse(JSON.stringify(lvl.bricks));
+      collectedBricks = 0;
+      document.getElementById('brickCounter').innerText = `0 / ${lvl.bricks.length}`;
+      spawnItems();
+      const wpos = gridToWorld(playerPos.x, playerPos.y);
+      if (characterMesh) {
+        characterMesh.position.set(wpos.x, 0.1, wpos.z);
+        characterMesh.rotation.y = DIR_DELTAS[playerDir].rotY;
+      }
+      renderPathPreviewOnBoard();
+    }
+
+    function clearCommands() {
+      if (isExecuting || isCityMode) return;
+      commands = [];
+      updateCommandTray();
+      resetCurrentLevelPosition();
+    }
+
+    function removeCommandAt(index) {
+      if (isExecuting || isCityMode) return;
+      playSound('click');
+      clearErrorHighlights();
+      commands.splice(index, 1);
+      updateCommandTray();
+    }
+
+    function updateCommandTray() {
+      const tray = document.getElementById('commandTray');
+      document.getElementById('stepCountBadge').innerText = commands.length;
+      tray.innerHTML = '';
+
+      if (commands.length === 0) {
+        tray.innerHTML = `<span id="emptyTrayText" class="text-xs text-slate-500 font-bold mx-auto">👇 Yön tuşlarına basarak karakteri hareket ettir!</span>`;
+        renderPathPreviewOnBoard();
+        return;
+      }
+
+      const cmdStyles = {
+        forward:   { icon: '⬆️', label: 'İLERİ',     classes: 'bg-blue-600 text-white' },
+        backward:  { icon: '⬇️', label: 'GERİ',      classes: 'bg-purple-600 text-white' },
+        turnLeft:  { icon: '↩️', label: 'SOLA DÖN',  classes: 'bg-orange-500 text-white' },
+        turnRight: { icon: '↪️', label: 'SAĞA DÖN',  classes: 'bg-pink-500 text-white' }
+      };
+
+      commands.forEach((cmd, idx) => {
+        const st = cmdStyles[cmd] || cmdStyles.forward;
+        const item = document.createElement('div');
+        item.id = `cmd-${idx}`;
+        item.className = `step-card flex-shrink-0 w-[54px] h-[58px] rounded-xl shadow border-b-2 flex flex-col items-center justify-between p-1 relative cursor-pointer select-none ${st.classes}`;
+        item.innerHTML = `
+          <button type="button" onclick="event.stopPropagation(); removeCommandAt(${idx})" class="absolute -top-1 -right-1 bg-rose-600 text-white rounded-full w-4 h-4 text-[9px] flex items-center justify-center font-black">✕</button>
+          <span class="text-lg leading-none mt-1">${st.icon}</span>
+          <span class="text-[8px] font-black uppercase text-white">${st.label}</span>
+          <span class="text-[8px] opacity-75">${idx + 1}</span>
+        `;
+        tray.appendChild(item);
+      });
+
+      renderPathPreviewOnBoard();
+    }
+
+    async function runAlgorithm() {
+      if (isExecuting || isCityMode) return;
+      if (commands.length === 0) {
+        showToast("Önce kod butonlarına bas!", "🧭");
+        return;
+      }
+
+      initAudio();
+      isExecuting = true;
+      clearErrorHighlights();
+
+      const runBtn = document.getElementById('runButton');
+      runBtn.classList.add('opacity-50');
+
+      const lvl = LEVELS[currentLevelIndex];
+      playerPos = { ...lvl.startPos };
+      playerDir = lvl.startDir !== undefined ? lvl.startDir : 0;
+      activeLevelBricks = JSON.parse(JSON.stringify(lvl.bricks));
+      collectedBricks = 0;
+      document.getElementById('brickCounter').innerText = `0 / ${lvl.bricks.length}`;
+      spawnItems();
+
+      const startWorld = gridToWorld(playerPos.x, playerPos.y);
+      characterMesh.position.set(startWorld.x, 0.1, startWorld.z);
+      characterMesh.rotation.y = DIR_DELTAS[playerDir].rotY;
+
+      await sleep(200);
+      let hitObstacle = false;
+
+      for (let i = 0; i < commands.length; i++) {
+        const cmdBox = document.getElementById(`cmd-${i}`);
+        const cmd = commands[i];
+
+        if (cmd === 'turnLeft') {
+          playerDir = (playerDir + 3) % 4;
+          characterMesh.rotation.y = DIR_DELTAS[playerDir].rotY;
+          playSound('turn');
+          await sleep(150);
+          continue;
+        } else if (cmd === 'turnRight') {
+          playerDir = (playerDir + 1) % 4;
+          characterMesh.rotation.y = DIR_DELTAS[playerDir].rotY;
+          playSound('turn');
+          await sleep(150);
+          continue;
+        }
+
+        const stepSign = cmd === 'backward' ? -1 : 1;
+        const nextX = playerPos.x + DIR_DELTAS[playerDir].dx * stepSign;
+        const nextY = playerPos.y + DIR_DELTAS[playerDir].dy * stepSign;
+
+        if (nextX < 0 || nextX >= lvl.gridSize || nextY < 0 || nextY >= lvl.gridSize) {
+          playSound('bump');
+          if (cmdBox) cmdBox.classList.add('error-step');
+          showToast("Alanın dışına çıktın!", "💥");
+          hitObstacle = true;
+          break;
+        }
+
+        const isObs = lvl.obstacles.some(o => o.x === nextX && o.y === nextY);
+        if (isObs) {
+          playSound('bump');
+          if (cmdBox) cmdBox.classList.add('error-step');
+          showToast("Kırmızı Trafik Konisi Var!", "🚨");
+          hitObstacle = true;
+          break;
+        }
+
+        playerPos.x = nextX;
+        playerPos.y = nextY;
+        const targetWorld = gridToWorld(playerPos.x, playerPos.y);
+        characterMesh.position.set(targetWorld.x, 0.1, targetWorld.z);
+        playSound('step');
+
+        const brickIndex = activeLevelBricks.findIndex(b => b.x === playerPos.x && b.y === playerPos.y && !b.collected);
+        if (brickIndex !== -1) {
+          activeLevelBricks[brickIndex].collected = true;
+          collectedBricks++;
+          playSound('brick');
+          document.getElementById('brickCounter').innerText = `${collectedBricks} / ${lvl.bricks.length}`;
+          if (itemsGroup.children[brickIndex]) itemsGroup.children[brickIndex].visible = false;
+        }
+
+        await sleep(180);
+      }
+
+      isExecuting = false;
+      runBtn.classList.remove('opacity-50');
+
+      if (!hitObstacle) checkLevelCompletion();
+    }
+
+    function checkLevelCompletion() {
+      const lvl = LEVELS[currentLevelIndex];
+      const allBricksCollected = collectedBricks === lvl.bricks.length;
+      const reachedGoal = playerPos.x === lvl.goal.x && playerPos.y === lvl.goal.y;
+
+      if (reachedGoal && allBricksCollected) {
+        playSound('win');
+        triggerConfetti();
+        completedLevels[currentLevelIndex] = true;
+        levelStars[currentLevelIndex] = 3;
+        saveProgress();
+
+        const modal = document.getElementById('celebrationModal');
+        document.getElementById('modalSvgPiece').innerText = lvl.partIcon;
+        modal.classList.remove('hidden');
+      } else if (reachedGoal && !allBricksCollected) {
+        showToast("Lego parçasını unuttun!", "🧱");
+      } else {
+        showToast("Tüm parçaları toplayıp Finish'e git!", "🏁");
+      }
+    }
+
+    function nextLevel() {
+      document.getElementById('celebrationModal').classList.add('hidden');
+      if (currentLevelIndex < LEVELS.length - 1) loadLevel(currentLevelIndex + 1);
+      else enterCityBuilderGame();
+    }
+
+    /* Lego Şehri Motoru */
+    const CITY_BLUEPRINTS = [
+      { id: 0, name: "Yollar", icon: "🛣️" },
+      { id: 1, name: "Ağaç", icon: "🌳" },
+      { id: 2, name: "Ev", icon: "🏠" },
+      { id: 3, name: "Bilim Merkezi", icon: "🏫" },
+      { id: 4, name: "Araç", icon: "🚒" },
+      { id: 5, name: "Şarj Ünitesi", icon: "⚡" },
+      { id: 6, name: "Lamba", icon: "🏮" },
+      { id: 7, name: "Çiçekler", icon: "🌷" }
+    ];
+
+    function enterCityBuilderGame() {
+      closeLevelSelectModal();
+      document.getElementById('startScreen').classList.add('hidden');
+      document.getElementById('celebrationModal').classList.add('hidden');
+
+      isCityMode = true;
+      document.getElementById('codingFooter').classList.add('hidden');
+      document.getElementById('cityBuildFooter').classList.remove('hidden');
+
+      while (itemsGroup.children.length > 0) itemsGroup.remove(itemsGroup.children[0]);
+      while (obstaclesGroup.children.length > 0) obstaclesGroup.remove(obstaclesGroup.children[0]);
+      while (goalGroup.children.length > 0) goalGroup.remove(goalGroup.children[0]);
+      while (pathPreviewGroup.children.length > 0) pathPreviewGroup.remove(pathPreviewGroup.children[0]);
+
+      boardGroup.visible = false;
+      camera.position.set(0, 16, 18);
+      controls.target.set(0, 0, 0);
+
+      if (characterMesh) characterMesh.position.set(0, 0.1, 4);
+
+      if (cityAssemblyGroup) scene.remove(cityAssemblyGroup);
+      cityAssemblyGroup = new THREE.Group();
+      scene.add(cityAssemblyGroup);
+
+      cityPlacedSteps.forEach((placed, idx) => {
+        if (placed) cityAssemblyGroup.add(createCityStructureMesh(idx));
+      });
+
+      renderCityBuilderTray();
+    }
+
+    function renderCityBuilderTray() {
+      const tray = document.getElementById('cityPartsTray');
+      tray.innerHTML = '';
+      CITY_BLUEPRINTS.forEach((bp, idx) => {
+        const isPlaced = cityPlacedSteps[idx];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `p-1 rounded-xl flex flex-col items-center justify-center border text-xs ${isPlaced ? 'bg-emerald-100 border-emerald-400' : 'bg-amber-50 border-amber-300'}`;
+        btn.innerHTML = `<span class="text-base">${bp.icon}</span><span class="text-[8px]">${bp.name}</span>`;
+        btn.onclick = () => placeCityStructure(idx);
+        tray.appendChild(btn);
+      });
+    }
+
+    function createCityStructureMesh(stepIdx) {
+      const group = new THREE.Group();
+      if (stepIdx === 0) {
+        const road = new THREE.Mesh(new THREE.BoxGeometry(10, 0.1, 2.5), createLegoMat(0x334155));
+        road.position.set(0, 0.05, 1.2); group.add(road);
+      } else if (stepIdx === 1) {
+        const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.2), createLegoMat(0x5c2d16));
+        tr.position.set(-3, 1.1, -2); group.add(tr);
+        const lf = new THREE.Mesh(new THREE.SphereGeometry(1.2), createLegoMat(0x22c55e));
+        lf.position.set(-3, 2.3, -2); group.add(lf);
+      } else if (stepIdx === 2) {
+        const h = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.8, 2.5), createLegoMat(0xfacc15));
+        h.position.set(0, 0.9, -2.5); group.add(h);
+      } else if (stepIdx === 3) {
+        const bld = new THREE.Mesh(new THREE.BoxGeometry(3, 2.2, 2.5), createLegoMat(0x0284c7));
+        bld.position.set(3.2, 1.1, -2.5); group.add(bld);
+      } else if (stepIdx === 4) {
+        const car = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.7, 1.0), createLegoMat(0xdc2626));
+        car.position.set(-1.8, 0.4, 1.2); group.add(car);
+      } else if (stepIdx === 5) {
+        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 1.6), createLegoMat(0x22c55e));
+        p.position.set(3.5, 0.8, 3); group.add(p);
+      } else if (stepIdx === 6) {
+        [-2.5, 2.5].forEach(x => {
+          const l = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.6), createLegoMat(0x94a3b8));
+          l.position.set(x, 0.8, -0.2); group.add(l);
+        });
+      } else if (stepIdx === 7) {
+        for(let i=0; i<3; i++){
+          const fl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), createLegoMat(0xec4899));
+          fl.position.set(-1.5 + i*1.5, 0.2, 3); group.add(fl);
+        }
+      }
+      return group;
+    }
+
+    function placeCityStructure(stepIdx) {
+      if (cityPlacedSteps[stepIdx]) return;
+      playSound('click');
+      cityPlacedSteps[stepIdx] = true;
+      cityAssemblyGroup.add(createCityStructureMesh(stepIdx));
+      playSound('win');
+      triggerConfetti();
+      renderCityBuilderTray();
+    }
+
+    function toggleCityDayNight() {
+      playSound('click');
+      isCityNight = !isCityNight;
+      document.body.style.setProperty('--lego-bg-color', isCityNight ? '#0f172a' : '#0284c7');
+      ambientLight.intensity = isCityNight ? 0.35 : 0.9;
+    }
+
+    function resetCityBuild() {
+      playSound('click');
+      cityPlacedSteps = new Array(8).fill(false);
+      if (cityAssemblyGroup) {
+        while (cityAssemblyGroup.children.length > 0) cityAssemblyGroup.remove(cityAssemblyGroup.children[0]);
+      }
+      renderCityBuilderTray();
+    }
+
+    function exitCityBuilderToLevels() {
+      playSound('click');
+      isCityNight = false;
+      applyLevelBackgroundTheme(currentLevelIndex);
+      ambientLight.intensity = 0.9;
+      loadLevel(currentLevelIndex);
+    }
+
+    /* SVG Karakterler */
+    function generateStudentAvatarSVG(heroKey, size = 100) {
+      if (heroKey === 'girl') {
+        return `
+          <svg width="${size}" height="${size}" viewBox="0 0 120 140">
+            <ellipse cx="26" cy="42" rx="12" ry="16" fill="#652810" />
+            <ellipse cx="94" cy="42" rx="12" ry="16" fill="#652810" />
+            <rect x="22" y="27" width="11" height="7" rx="3" fill="#2563eb" />
+            <rect x="87" y="27" width="11" height="7" rx="3" fill="#2563eb" />
+            <rect x="36" y="14" width="48" height="38" rx="10" fill="#facc15" stroke="#b45309" stroke-width="2" />
+            <path d="M 34 26 Q 60 7 86 26 Z" fill="#652810" />
+            <circle cx="49" cy="32" r="4" fill="#0f172a" />
+            <circle cx="71" cy="32" r="4" fill="#0f172a" />
+            <path d="M 49 40 Q 60 48 71 40" stroke="#0f172a" stroke-width="3" fill="none" stroke-linecap="round" />
+            <polygon points="35,56 85,56 91,98 29,98" fill="#0f2547" />
+            <polygon points="33,68 87,68 89,80 31,80" fill="#75142b" />
+            <polygon points="46,56 74,56 60,70" fill="#ffffff" />
+            <rect x="31" y="105" width="27" height="25" rx="3" fill="#1e3050" />
+            <rect x="62" y="105" width="27" height="25" rx="3" fill="#1e3050" />
+          </svg>
+        `;
+      } else {
+        return `
+          <svg width="${size}" height="${size}" viewBox="0 0 120 140">
+            <rect x="36" y="14" width="48" height="38" rx="10" fill="#facc15" stroke="#b45309" stroke-width="2" />
+            <path d="M 33 24 Q 60 5 87 24 Q 75 14 58 16 Q 42 12 33 24 Z" fill="#8a451d" />
+            <circle cx="49" cy="32" r="4" fill="#0f172a" />
+            <circle cx="71" cy="32" r="4" fill="#0f172a" />
+            <path d="M 48 40 Q 60 48 72 40" stroke="#0f172a" stroke-width="3" fill="none" stroke-linecap="round" />
+            <polygon points="35,56 85,56 91,98 29,98" fill="#0f2547" />
+            <polygon points="33,68 87,68 89,80 31,80" fill="#75142b" />
+            <polygon points="46,56 74,56 60,70" fill="#ffffff" />
+            <rect x="31" y="105" width="27" height="25" rx="3" fill="#1e3050" />
+            <rect x="62" y="105" width="27" height="25" rx="3" fill="#1e3050" />
+          </svg>
+        `;
+      }
+    }
+
+    function selectHero(heroKey) {
+      playSound('click');
+      selectedHeroKey = heroKey;
+      saveProgress();
+
+      const girlBtn = document.getElementById('heroBtn-girl');
+      const boyBtn = document.getElementById('heroBtn-boy');
+      if (heroKey === 'girl') {
+        girlBtn.classList.add('border-pink-500'); girlBtn.classList.remove('border-slate-200');
+        boyBtn.classList.remove('border-blue-600'); boyBtn.classList.add('border-slate-200');
+      } else {
+        boyBtn.classList.add('border-blue-600'); boyBtn.classList.remove('border-slate-200');
+        girlBtn.classList.remove('border-pink-500'); girlBtn.classList.add('border-slate-200');
+      }
+
+      document.getElementById('headerAvatar').innerHTML = generateStudentAvatarSVG(heroKey, 34);
+      spawnPlayer();
+    }
+
+    function openStartScreen() {
+      playSound('click');
+      updateProgressCountersUI();
+      document.getElementById('startScreen').classList.remove('hidden');
+    }
+
+    function startScreenToLevelSelect() {
+      playSound('click');
+      document.getElementById('startScreen').classList.add('hidden');
+      openLevelSelectModal();
+    }
+
+    function startGame() {
+      playSound('win');
+      document.getElementById('startScreen').classList.add('hidden');
+      loadLevel(0);
+    }
+
+    function openLevelSelectModal() {
+      playSound('click');
+      const holder = document.getElementById('levelSelectListHolder');
+      holder.innerHTML = '';
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-5 gap-2';
+
+      LEVELS.forEach((lvl, idx) => {
+        const isDone = completedLevels[idx];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `p-2 rounded-xl border flex flex-col items-center justify-center text-xs ${idx === currentLevelIndex ? 'bg-yellow-300 border-yellow-500 font-black' : isDone ? 'bg-emerald-100 border-emerald-400 font-bold' : 'bg-slate-50'}`;
+        btn.innerHTML = `<span>${lvl.partIcon}</span><span>${lvl.id}</span>`;
+        btn.onclick = () => {
+          document.getElementById('levelSelectModal').classList.add('hidden');
+          loadLevel(idx);
+        };
+        grid.appendChild(btn);
+      });
+
+      holder.appendChild(grid);
+      document.getElementById('levelSelectModal').classList.remove('hidden');
+    }
+
+    function closeLevelSelectModal() {
+      document.getElementById('levelSelectModal').classList.add('hidden');
+    }
+
+    function showToast(text, icon = '⚠️') {
+      const toast = document.getElementById('toastMessage');
+      document.getElementById('toastText').innerText = text;
+      document.getElementById('toastIcon').innerText = icon;
+      toast.classList.remove('-translate-y-24');
+      toast.classList.add('translate-y-4');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-4');
+        toast.classList.add('-translate-y-24');
+      }, 2400);
+    }
+
+    function triggerConfetti() {
+      if (typeof confetti === 'function') confetti({ particleCount: 50, spread: 70, origin: { y: 0.6 } });
+    }
+
+    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (controls) controls.update();
+      if (renderer && scene && camera) renderer.render(scene, camera);
+    }
+
+    window.onload = function() {
+      document.getElementById('heroPreview-girl').innerHTML = generateStudentAvatarSVG('girl', 90);
+      document.getElementById('heroPreview-boy').innerHTML = generateStudentAvatarSVG('boy', 90);
+      loadSavedProgress();
+      init3DScene();
+      selectHero(selectedHeroKey);
+      loadLevel(0);
+    };
+  </script>
+</body>
+</html>
